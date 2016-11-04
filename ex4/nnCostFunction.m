@@ -63,8 +63,10 @@ Theta2_grad = zeros(size(Theta2));
 %
 
 a1 = [ones(m, 1) X]; #add bias unit to initial input
-a2 = [ones(m,1), sigmoid(a1*Theta1')];
-a3 = sigmoid(a2*Theta2'); # no bias unit because it's the output-layer
+z2 = a1*Theta1';
+a2 = [ones(size(z2, 1), 1) sigmoid(z2)];
+z3 = a2*Theta2';
+a3 = sigmoid(z3); # no bias unit because it's the output-layer
 twoDimY = sparse(y, 1:m,1)'; #create binary-vector of value 1-10 [0,0,0,1,....]
 
 #double sum because of two-dimensional Y and thetas
@@ -72,19 +74,37 @@ J = (1/m)*sum(sum(-twoDimY.*log(a3)-((1-twoDimY).*log(1-a3))));
 
 regulator = (lambda/(2*m))*(sum(sum(Theta1(:,2:end).^2)) + sum(sum(Theta2(:,2:end).^2)));
 J = J + regulator;
+%{
+for t = 1:m,
+  #local overwrite of activation variables, to not do vectorized impl
+  a1 = [1; X(t,:)'];
+  z2 = Theta1 * a1;
+  a2 = [1; sigmoid(z2)];
+  z3 = Theta2 * a2;
+  a3 = sigmoid(z3);
+  
+  yy = ([1:num_labels] == y(t))';
+  
+  delta3 = a3 - yy;
+  delta2 = (Theta2' * delta3) .* [1; sigmoidGradient(z2)];
+  delta2 = delta2(2:end);
+  
+  Theta2_grad = Theta2_grad + delta3 * a2';
+  Theta1_grad = Theta1_grad + delta2 * a1';
+  
+end;
+%}
 
+#vectorized solution?
+sigma3 = a3 - twoDimY;
+sigma2 = (sigma3*Theta2 .* sigmoidGradient([ones(size(z2, 1), 1) z2]))(:, 2:end);
+delta3 = sigma3' * a2;
+delta2 = sigma2' * a1;
 
+Theta1_grad = regularizedGradient(delta2, Theta1, lambda, m);
+Theta2_grad = regularizedGradient(delta3, Theta2, lambda, m);
 
-
-
-
-
-
-
-
-
-
-
+grad = [Theta1_grad(:); Theta2_grad(:)];
 
 
 % -------------------------------------------------------------
@@ -95,4 +115,8 @@ J = J + regulator;
 grad = [Theta1_grad(:) ; Theta2_grad(:)];
 
 
+end
+
+function [regularized_gradient] = regularizedGradient(gradient, theta, lambda, m)
+regularized_gradient = gradient ./ m + (lambda/m) * [zeros(size(theta,1), 1) theta(:, 2:end)];
 end
